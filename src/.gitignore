@@ -1,0 +1,15 @@
+node_modules/*
+abi/*
+_node_modules/*
+test/*.t.sol
+
+node_modules
+coverage
+typechain
+cache
+artifacts
+typechain
+
+.env
+yarn.lock
+coverage.json

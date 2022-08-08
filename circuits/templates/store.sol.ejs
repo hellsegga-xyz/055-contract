@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.0;
+
+contract <%=name%>VKStore {
+    function verifyingKey() external pure returns (uint256[<%=IC.length*2%>] memory) {
+        uint256[<%=IC.length*2%>] memory IC;
+        
+        <% for (let i=0; i<IC.length; i++) { %>
+            IC[<%=i*2%>] = <%=IC[i][0]%>; 
+            IC[<%=i*2+1%>] = <%=IC[i][1]%>;                                 
+        <% } %>   
+            
+        return IC;
+        
+    }
+}

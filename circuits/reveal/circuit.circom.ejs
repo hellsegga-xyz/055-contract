@@ -1,0 +1,101 @@
+pragma circom 2.0.0;
+
+include "../node_modules/circomlib/circuits/pedersen.circom";
+include "../range_proof/circuit.circom";
+include "../node_modules/circomlib/circuits/comparators.circom";
+include "../node_modules/circomlib/circuits/switcher.circom";
+include "../node_modules/circomlib/circuits/sign.circom";
+include "../node_modules/circomlib/circuits/bitify.circom";
+include "../node_modules/circomlib/circuits/mimcsponge.circom";
+include "../crypto/encrypt.circom";
+include "../crypto/ecdh.circom";
+include "../crypto/publickey_derivation.circom";
+include "../math/circuit.circom";
+
+/*
+Public Input Signals:
+- hash_image
+- public_key
+- user_public_key
+- image_compact (original image)
+
+Private Input Signals:
+- secret_key
+- user_private_key
+- image_enc
+*/
+
+// Note that this circuit has no output
+template Reveal(s_a, c, u) { //128,4,1
+    // Secret key
+    signal input secret_key;
+    component secret_key_hash[2];
+    
+    secret_key_hash[0] = MiMC7(91);
+    secret_key_hash[1] = MiMC7(91);
+    
+    secret_key_hash[0].x_in <== secret_key;
+    secret_key_hash[0].k <== 0;
+    // Change this to a different number
+    secret_key_hash[1].x_in <== <%=secret_key%>;
+    secret_key_hash[1].k <== 0;
+    
+    // Ensures hash of secret_key is hash of the really large number
+    secret_key_hash[0].out === secret_key_hash[1].out;
+
+    signal input hash_image;
+    signal input user_private_key;
+    signal input public_key[2];
+    signal input user_public_key[2];
+    signal input image_enc[u*s_a*c];
+    signal input image_compact[u*s_a*c];
+
+    
+    // Component that derives the public key using private key as input
+    component pubkey = PublicKey();
+    
+    // Ensures user_private_key (private input) matches user_public_key (public input)
+    pubkey.private_key <== user_private_key;
+    pubkey.public_key[0] === user_public_key[0];
+    pubkey.public_key[1] === user_public_key[1];
+
+    log(public_key[0]);
+    log(public_key[1]);
+
+    // Component that derives the shared key with public key and private key as input
+    component ecdh = Ecdh();
+    // Computes shared key using user_private_key and public_key
+    ecdh.private_key <== user_private_key;
+    ecdh.public_key[0] <== public_key[0];
+    ecdh.public_key[1] <== public_key[1];
+
+    // Component that encrypts data using a shared key as input
+    // out[0] is a hash (using MultiMiMC7) of the entire image into a constant sized string
+    // out[1] to out[N] are hashes of individual pixels (using MiMC7)
+    component enc = EncryptBits(u*s_a*c);
+
+    log(ecdh.shared_key);
+    enc.shared_key <== ecdh.shared_key;
+
+    // Encrypts image_compact
+    var h = 0;
+    for (var i = 0; i < u; i++){
+        for (var j = 0; j < s_a; j++){
+            for (var c0 = 0; c0 < c; c0++){
+                enc.plaintext[h] <== image_compact[h];
+                h += 1;
+           }
+        }
+    }
+
+    // Ensures the hash_image matches the hash of image_compact
+    enc.out[0] === hash_image;
+
+    // Ensures the encrypted image is image_enc
+    for (var i = 1; i < u*s_a*c + 1; i ++) {
+        enc.out[i] === image_enc[i-1];
+    }
+    
+}
+
+component main {public [hash_image, public_key, user_public_key, image_compact]} = Reveal(<%=reveal_params[0]%>,<%=reveal_params[1]%>,<%=reveal_params[2]%>);
